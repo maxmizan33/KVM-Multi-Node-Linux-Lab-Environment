@@ -169,21 +169,41 @@ sudo virt-install \
   --import \
   --noautoconsole</code></pre>
 
-<h3>4. Reserve Static IP for node1</h3>
+<h3>4. Set Static IP via Netplan (Run Directly Inside node1)</h3>
 
-<pre><code class="language-bash"># Retrieve node1's MAC address assigned by KVM
-# 🔍 Output looks like: &lt;mac address='52:54:00:xx:xx:xx'/&gt;
-sudo virsh dumpxml node1 | grep "mac address"
+<p>To configure a permanent static IP directly inside the VM, use <b>Netplan</b> (Ubuntu's default network management tool). Access the VM console or dynamic IP first via SSH, then execute:</p>
 
-# Assign permanent static IP reservation on host DHCP
-# 💡 CHANGE MAC: Replace 52:54:00:11:22:33 with node1's real MAC address
-# 💡 CHANGE IP: Replace 192.168.122.10 with your desired IP address
-sudo virsh net-update default add ip-dhcp-host \
-  "&lt;host mac='52:54:00:11:22:33' name='node1' ip='192.168.122.10'/&gt;" \
-  --live --config
+<p><b>Step 1: Write Netplan Configuration</b></p>
+<pre><code class="language-bash">sudo bash -c 'cat &lt;&lt; EOF &gt; /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      dhcp4: no
+      addresses:
+        - 192.168.122.10/24
+      routes:
+        - to: default
+          via: 192.168.122.1
+      nameservers:
+        addresses:
+          - 192.168.122.1
+          - 8.8.8.8
+EOF'</code></pre>
 
-# Verify SSH connectivity from host
-ssh ubuntu@192.168.122.10</code></pre>
+<p><b>Step 2: Bring Interface Up, Apply &amp; Test Configuration</b></p>
+<pre><code class="language-bash"># Secure permissions on configuration file
+sudo chmod 600 /etc/netplan/01-netcfg.yaml
+
+# Ensure interface state is UP before applying configuration
+sudo ip link set enp1s0 up
+
+# Apply network settings
+sudo netplan apply
+
+# Verify assigned static IP and interface state
+ip -br addr show enp1s0</code></pre>
 
 <hr />
 
@@ -243,23 +263,55 @@ sudo virt-install \
   --noautoconsole</code></pre>
 </details>
 
-<h3>Step 2: Set Static IPs for Cloned Nodes</h3>
+<h3>Step 2: Configure Static IPs for Cloned Nodes (Inside node2 &amp; node3)</h3>
 
-<pre><code class="language-bash"># Get MAC addresses for new VMs
-sudo virsh dumpxml node2 | grep "mac address"
-sudo virsh dumpxml node3 | grep "mac address"
+<p>Log into each cloned VM and update <code>/etc/netplan/01-netcfg.yaml</code> with their target static IP addresses:</p>
 
-# Reserve Static IP for node2 (192.168.122.11)
-# 💡 CHANGE MAC: Replace 52:54:00:AA:BB:CC with node2's MAC
-sudo virsh net-update default add ip-dhcp-host \
-  "&lt;host mac='52:54:00:AA:BB:CC' name='node2' ip='192.168.122.11'/&gt;" \
-  --live --config
+<p><b>For node2 (192.168.122.11):</b></p>
+<pre><code class="language-bash">sudo bash -c 'cat &lt;&lt; EOF &gt; /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      dhcp4: no
+      addresses:
+        - 192.168.122.11/24
+      routes:
+        - to: default
+          via: 192.168.122.1
+      nameservers:
+        addresses:
+          - 192.168.122.1
+          - 8.8.8.8
+EOF'
 
-# Reserve Static IP for node3 (192.168.122.12)
-# 💡 CHANGE MAC: Replace 52:54:00:DD:EE:FF with node3's MAC
-sudo virsh net-update default add ip-dhcp-host \
-  "&lt;host mac='52:54:00:DD:EE:FF' name='node3' ip='192.168.122.12'/&gt;" \
-  --live --config</code></pre>
+sudo chmod 600 /etc/netplan/01-netcfg.yaml
+sudo ip link set enp1s0 up
+sudo netplan apply</code></pre>
+
+<p><b>For node3 (192.168.122.12):</b></p>
+<pre><code class="language-bash">sudo bash -c 'cat &lt;&lt; EOF &gt; /etc/netplan/01-netcfg.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp1s0:
+      dhcp4: no
+      addresses:
+        - 192.168.122.12/24
+      routes:
+        - to: default
+          via: 192.168.122.1
+      nameservers:
+        addresses:
+          - 192.168.122.1
+          - 8.8.8.8
+EOF'
+
+sudo chmod 600 /etc/netplan/01-netcfg.yaml
+sudo ip link set enp1s0 up
+sudo netplan apply</code></pre>
 
 <hr />
 
